@@ -230,7 +230,8 @@ app.post("/api/collect-money", async (req, res) => {
     if (!response.ok) {
       let errorData;
       try {
-        errorData = await response.json();
+        const text = await response.text();
+        errorData = JSON.parse(text);
         console.error("Livepay API Error Response:", errorData);
       } catch(e) {
         errorData = { message: response.statusText };

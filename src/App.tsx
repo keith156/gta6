@@ -52,7 +52,14 @@ export default function App() {
       
       try {
         const res = await fetch(`/api/payment-status/${reference}`);
-        const data = await res.json();
+        const text = await res.text();
+        let data;
+        try {
+          data = JSON.parse(text);
+        } catch(e) {
+          console.error("Failed to parse payment status response:", text);
+          throw new Error("Server returned an invalid response.");
+        }
         
         if (data.status === 'success') {
           setPaymentState('success');
@@ -99,11 +106,19 @@ export default function App() {
       });
 
       if (!res.ok) {
-        const errorData = await res.json();
+        const text = await res.text();
+        let errorData = { error: "Payment request failed" };
+        try { errorData = JSON.parse(text); } catch(e) { console.error("Error response:", text) }
         throw new Error(errorData.error || errorData.message || "Payment request failed");
       }
 
-      const data = await res.json();
+      const text = await res.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch(e) {
+        throw new Error("Invalid response from server: " + text.substring(0, 50));
+      }
       const reference = data.reference;
       
       if (reference) {
