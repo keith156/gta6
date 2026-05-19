@@ -1,0 +1,6 @@
+{
+  "name": "CraftWorld Game",
+  "description": "A high-converting landing page to purchase and instantly download a sandbox voxel game.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
