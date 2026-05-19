@@ -8,36 +8,44 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-// Firebase Initialization
-let firebaseConfig: any = {};
-try {
-  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(configPath)) {
-    firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
-  }
-} catch (e) {
-  console.warn("Could not read firebase-applet-config.json");
-}
-
 let db: FirebaseFirestore.Firestore | null = null;
 let firebaseInitialized = false;
+let firebaseStartupError: string | null = null;
 
 function initFirebase() {
   if (firebaseInitialized) return;
   
+  let firebaseConfig: any = {};
+  try {
+    const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+    if (fs.existsSync(configPath)) {
+      firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+    }
+  } catch (e) {
+    console.warn("Could not read firebase-applet-config.json");
+  }
+
   if (!getApps().length) {
     if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
-      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-      initializeApp({
-        credential: cert(serviceAccount),
-        projectId: firebaseConfig.projectId || serviceAccount.project_id
-      });
+      try {
+        const rawKey = process.env.FIREBASE_SERVICE_ACCOUNT_KEY.trim();
+        const serviceAccount = JSON.parse(rawKey);
+        initializeApp({
+          credential: cert(serviceAccount),
+          projectId: firebaseConfig.projectId || serviceAccount.project_id
+        });
+      } catch (e: any) {
+        console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT_KEY JSON:", e.message);
+        firebaseStartupError = "FIREBASE_SERVICE_ACCOUNT_KEY is not valid JSON. Please check your Vercel environment variables.";
+        return;
+      }
     } else if (firebaseConfig.projectId) {
       initializeApp({
         projectId: firebaseConfig.projectId
       });
     } else {
       console.warn("Firebase not properly configured. Missing FIREBASE_SERVICE_ACCOUNT_KEY.");
+      firebaseStartupError = "Firebase not configured. Missing FIREBASE_SERVICE_ACCOUNT_KEY in environment.";
       return;
     }
   }
@@ -48,13 +56,23 @@ function initFirebase() {
       : getFirestore();
     firebaseInitialized = true;
   } catch (e) {
-    db = getFirestore();
-    firebaseInitialized = true;
+    try {
+      db = getFirestore();
+      firebaseInitialized = true;
+    } catch (inner: any) {
+      console.error("Failed to initialize Firestore:", inner.message);
+      firebaseStartupError = "Failed to initialize Firestore.";
+    }
   }
 }
 
-// Call init once
-initFirebase();
+// Call init once safely
+try {
+  initFirebase();
+} catch (e: any) {
+  console.error("Unhandled error initializing Firebase:", e);
+  firebaseStartupError = "Unhandled server error initializing Firebase.";
+}
 
 const app = express();
 
@@ -66,6 +84,9 @@ app.use(express.json({
 
 app.post("/api/webhooks/livepay", async (req, res) => {
   try {
+    if (firebaseStartupError) {
+      return res.status(500).json({ error: firebaseStartupError });
+    }
     const signatureHeader = req.headers["x-webhook-signature"] as string;
     const webhookSecret = process.env.LIVEPAY_WEBHOOK_SECRET;
 
@@ -139,6 +160,9 @@ app.post("/api/webhooks/livepay", async (req, res) => {
 
 app.get("/api/payment-status/:ref", async (req, res) => {
   try {
+    if (firebaseStartupError) {
+      return res.status(500).json({ error: firebaseStartupError });
+    }
     if (!db) {
       return res.status(500).json({ error: "Firebase is not configured" });
     }
@@ -156,6 +180,9 @@ app.get("/api/payment-status/:ref", async (req, res) => {
 
 app.post("/api/collect-money", async (req, res) => {
   try {
+    if (firebaseStartupError) {
+      return res.status(500).json({ error: firebaseStartupError });
+    }
     const { phoneNumber, provider, amount, email } = req.body;
     const apiKey = process.env.LIVEPAY_API_KEY;
 
