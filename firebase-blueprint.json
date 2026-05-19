@@ -1,0 +1,33 @@
+{
+  "entities": {
+    "PaymentStatus": {
+      "title": "PaymentStatus",
+      "description": "Stores status of user payments from the LivePay API.",
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "description": "Payment status"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "phoneNumber": {
+          "type": "string"
+        },
+        "updatedAt": {
+          "type": "timestamp"
+        }
+      },
+      "required": ["status", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/payments/{paymentId}": {
+      "schema": {
+        "$ref": "#/entities/PaymentStatus"
+      },
+      "description": "Payment status updates mapping."
+    }
+  }
+}

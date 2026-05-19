@@ -5,6 +5,9 @@
 
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import feature1Img from './assets/images/regenerated_image_1779183628956.webp';
+import feature2Img from './assets/images/regenerated_image_1779183633026.jpg';
+import feature3Img from './assets/images/regenerated_image_1779183635689.jpg';
 import { 
   Box, 
   Gamepad2, 
@@ -255,19 +258,19 @@ export default function App() {
               icon={<Sword className="w-8 h-8 text-red-500" />}
               title="Organized Crime"
               description="Rise through the ranks by planning epic heists and taking down rival syndicates in intense gang warfare."
-              image="https://images.unsplash.com/photo-1542451313-0cebc71c4ac3?q=80&w=600&auto=format&fit=crop"
+              image={feature1Img}
             />
             <FeatureCard 
               icon={<Gamepad2 className="w-8 h-8 text-cyan" />}
               title="Exotic Rides"
               description="Customize heavily modified supercars and race through the glaring neon streets at blistering speeds."
-              image="https://images.unsplash.com/photo-1621360841013-c7683cfa86c5?q=80&w=600&auto=format&fit=crop"
+              image={feature2Img}
             />
             <FeatureCard 
               icon={<Globe className="w-8 h-8 text-brand-500" />}
               title="Endless Multiplayer"
               description="Form crews with friends online, buy penthouses, and rule the criminal underworld together."
-              image="https://images.unsplash.com/photo-1563854350130-18e0a84eef26?q=80&w=600&auto=format&fit=crop"
+              image={feature3Img}
             />
           </div>
         </div>

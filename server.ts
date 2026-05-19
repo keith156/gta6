@@ -3,8 +3,46 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import dotenv from "dotenv";
 import crypto from "crypto";
+import fs from "fs";
+import { initializeApp, cert, getApps } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
 
 dotenv.config();
+
+// Firebase Initialization
+let firebaseConfig: any = {};
+try {
+  const configPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(configPath)) {
+    firebaseConfig = JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  }
+} catch (e) {
+  console.warn("Could not read firebase-applet-config.json");
+}
+
+if (!getApps().length) {
+  if (process.env.FIREBASE_SERVICE_ACCOUNT_KEY) {
+    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+    initializeApp({
+      credential: cert(serviceAccount),
+      projectId: firebaseConfig.projectId || serviceAccount.project_id
+    });
+  } else {
+    initializeApp({
+      projectId: firebaseConfig.projectId
+    });
+  }
+}
+
+let db: FirebaseFirestore.Firestore;
+try {
+  // Use specific database ID if available
+  db = firebaseConfig.firestoreDatabaseId 
+    ? getFirestore(firebaseConfig.firestoreDatabaseId)
+    : getFirestore();
+} catch (e) {
+  db = getFirestore();
+}
 
 // Extend express Request to include rawBody
 declare global {
@@ -15,8 +53,7 @@ declare global {
   }
 }
 
-// In-memory store for payment statuses mapping references to their current state
-const paymentStatuses = new Map<string, string>();
+// (Removed in-memory payment store)
 
 async function startServer() {
   const app = express();
@@ -82,14 +119,19 @@ async function startServer() {
       const rawStatus = (payload.status || '').toLowerCase();
       
       if (ref) {
+        let finalStatus = rawStatus;
         if (rawStatus.includes('success') || rawStatus.includes('completed')) {
-          paymentStatuses.set(ref, 'success');
+          finalStatus = 'success';
         } else if (rawStatus.includes('fail') || rawStatus.includes('cancel') || rawStatus.includes('error')) {
-          paymentStatuses.set(ref, 'failed');
-        } else {
-          paymentStatuses.set(ref, rawStatus);
+          finalStatus = 'failed';
         }
-        console.log(`Updated payment ${ref} to status: ${paymentStatuses.get(ref)}`);
+
+        await db.collection('payments').doc(ref).set({
+          status: finalStatus,
+          updatedAt: new Date()
+        }, { merge: true });
+
+        console.log(`Updated payment ${ref} to status: ${finalStatus}`);
       }
 
       res.status(200).send("Webhook received");
@@ -100,9 +142,18 @@ async function startServer() {
   });
 
   // Status checking endpoint
-  app.get("/api/payment-status/:ref", (req, res) => {
-    const status = paymentStatuses.get(req.params.ref) || 'unknown';
-    res.json({ status });
+  app.get("/api/payment-status/:ref", async (req, res) => {
+    try {
+      const doc = await db.collection('payments').doc(req.params.ref).get();
+      if (doc.exists) {
+        res.json({ status: doc.data()?.status || 'unknown' });
+      } else {
+        res.json({ status: 'unknown' });
+      }
+    } catch (e) {
+      console.error("Error fetching payment status:", e);
+      res.json({ status: 'unknown' });
+    }
   });
 
   // API Routes
@@ -120,7 +171,14 @@ async function startServer() {
       }
 
       const reference = `GTA6${Date.now()}`;
-      paymentStatuses.set(reference, 'pending');
+      
+      // Store pending payment in firestore
+      await db.collection('payments').doc(reference).set({
+        status: 'pending',
+        amount: amount,
+        phoneNumber: phoneNumber || null,
+        updatedAt: new Date()
+      });
 
       const payload = {
         accountNumber: process.env.LIVEPAY_ACCOUNT_NUMBER,
